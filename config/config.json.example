@@ -1,0 +1,21 @@
+{
+  "ai": {
+    "model_name": "gpt-4o-search-preview",
+    "analysis_interval": 3600,
+    "confidence_threshold": 0.7,
+    "base_url": "https://api.openai.com/v1"
+  },
+  "symbols": [
+    "BTC/USDT",
+    "ETH/USDT",
+    "SOL/USDT",
+    "XAUT/USDT",
+    "OKB/USDT",
+    "DOGE/USDT"
+  ],
+  "data": {
+    "history_days": 30,
+    "update_interval": 300
+  },
+  "ip_whitelist": ["127.0.0.1", "146.235.232.49", "154.21.93.89","2605:52c0:2:1c9b:2c16:31ff:fe0c:aaa"]
+}
