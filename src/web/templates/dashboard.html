@@ -489,13 +489,10 @@
         <div class="smart-analysis-section">
             <div class="card">
                 <div class="card-title">
-                    🧠 DeepSeek智能投资分析
+                    🧠 OpenAI智能投资分析
                     <div style="float: right; font-size: 0.8em;">
                         <button onclick="loadSmartAnalysis(true)" class="refresh-btn" title="强制刷新分析">
                             🔄 重新分析
-                        </button>
-                        <button onclick="loadSmartAnalysisSync()" class="refresh-btn" title="快速同步分析" style="margin-left: 5px; background: #28a745;">
-                            ⚡ 快速分析
                         </button>
                     </div>
                 </div>
@@ -731,7 +728,7 @@
                     console.warn('获取基础分析失败:', error);
                 }
                 
-                // 然后启动DeepSeek AI分析
+                // 然后启动OpenAI AI分析
                 const container = document.getElementById('smartAnalysis');
                 
                 // 在基础分析上方添加AI分析进度
@@ -740,7 +737,7 @@
                 aiAnalysisDiv.innerHTML = `
                     <div class="analysis-loading" style="margin-bottom: 20px;">
                         <div class="loading-spinner"></div>
-                        <h3>🤖 DeepSeek AI分析进行中...</h3>
+                        <h3>🤖 OpenAI AI分析进行中...</h3>
                         <p>正在为您提供更深入的智能分析...</p>
                         <div class="progress-bar">
                             <div class="progress-fill" id="analysisProgress" style="width: 10%;"></div>
@@ -888,7 +885,7 @@
                         if (progress < 30) {
                             statusText = '获取市场数据...';
                         } else if (progress < 60) {
-                            statusText = 'DeepSeek AI 分析中...';
+                            statusText = 'OpenAI AI 分析中...';
                         } else if (progress < 90) {
                             statusText = '生成投资建议...';
                         } else {
@@ -924,7 +921,7 @@
                         document.getElementById('smartAnalysis').innerHTML = 
                             `<div class="error">
                                 <h3>⏰ 分析超时</h3>
-                                <p>DeepSeek API响应超时，请稍后重试</p>
+                                <p>OpenAI API响应超时，请稍后重试</p>
                                 <button onclick="loadSmartAnalysis(true)" class="retry-btn">重新分析</button>
                             </div>`;
                         return true; // 返回true表示任务完成
@@ -1207,7 +1204,7 @@
 
                         <!-- 原始AI分析内容 -->
                         <div class="analysis-section" style="margin-bottom: 20px;">
-                            <h4 style="color: #2c3e50; margin-bottom: 10px;">🤖 DeepSeek AI 投资分析</h4>
+                            <h4 style="color: #2c3e50; margin-bottom: 10px;">🤖 OpenAI AI 投资分析</h4>
                             <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; line-height: 1.6; font-size: 0.95em;">
                                 ${analysisData.ai_response}
                             </div>
