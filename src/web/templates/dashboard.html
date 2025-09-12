@@ -1438,11 +1438,20 @@
                 return;
             }
             
-            let html = '<table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th></tr>';
+            let html = '<table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>时间</th></tr>';
             
             trades.slice(0, 10).forEach(trade => {
                 // 格式化数量，最多显示6位小数
                 const formattedAmount = parseFloat(trade.amount).toFixed(6).replace(/\.?0+$/, '');
+                
+                // 格式化时间显示
+                const formattedDateTime = trade.datetime ? 
+                    new Date(trade.datetime).toLocaleString('zh-CN', {
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }) : '-';
                 
                 html += `
                     <tr>
@@ -1450,6 +1459,7 @@
                         <td class="${trade.side === 'buy' ? 'positive' : 'negative'}">${trade.side}</td>
                         <td>${formattedAmount}</td>
                         <td>$${trade.price?.toFixed(2)}</td>
+                        <td style="font-size: 0.9em; color: #666;">${formattedDateTime}</td>
                     </tr>
                 `;
             });

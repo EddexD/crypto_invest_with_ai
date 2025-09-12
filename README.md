@@ -135,6 +135,8 @@ config目录下的`secrets.json.example`重命名为`secrets.json`，然后打�
 }
 ```
 
+⚠️ okx的api密钥只需要读取权限就可以！
+
 ### 4. 配置关注币种
 config目录下的`config.json.example`重命名为`config.json`，然后编辑
 ```json
