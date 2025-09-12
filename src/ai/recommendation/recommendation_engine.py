@@ -174,7 +174,10 @@ class SmartRecommendationEngine:
                 cost_price = float(pos.get('cost'))/float(pos.get('amount')) if pos.get('amount', 0) != 0 else 0
                 market_price = float(pos.get('market_value', 0))/float(pos.get('amount', 0)) if pos.get('amount', 0) != 0 else 0
                 position_rows.append(f"{pos.get('symbol', ''):<8} {pos.get('amount', 0):>10.6f} {cost_price:>8.2f} {market_price:>8.2f} {pos.get('cost', 0):>8.1f} {pos.get('market_value', 0):>8.1f} {pnl_value:>8} {pnl_rate:>8}")
-            position_table = "代币        数量        成本价    当前价      成本      当前价值     盈亏        盈亏%\n" + "-"*85 + "\n" + "\n".join(position_rows)
+            if position_rows:
+                position_table = "代币        数量        成本价    当前价      成本      当前价值     盈亏        盈亏%\n" + "-"*85 + "\n" + "\n".join(position_rows)
+            else:
+                position_table = "[当前没有持仓]"
 
             # 投资组合汇总
             total_cost = portfolio_data.get('total_cost', 0)
@@ -214,7 +217,7 @@ class SmartRecommendationEngine:
 2. **持仓优化建议**：针对当前我的持仓情况，给出明确的操作建议和价格点位。
 3. **订单管理建议**：对于当前未完成的限价委托订单，建议是否需要调整价格、取消或保持。
 4. **资金管理策略**：USDT余额如何分配、新的建仓机会、风险控制措施
-5.1. **具体买入建议**：使用网络搜索获取最新的技术面和新闻面信息；
+5.1. **具体买入建议**：使用网络搜索获取最新的技术面和新闻面信息，还有可能影响市场的宏观经济因素；
 5.2. 基于历史 K 线数据、技术趋势与最新消息，为每个关注币种提供：
    - 合理的 **买入价格区间**；
    - 建议的 **买入金额**（USDT，下限/上限或具体数量）；
@@ -222,9 +225,12 @@ class SmartRecommendationEngine:
 
 请提供具体、可操作的投资建议，包括：
 - 明确的买入/卖出价格点位
+ -- 注意我的目的是为了短期（3-7天）获利，如果亏损我会拿住等待回升盈利再卖出；因此买入点不能离当前价格太远；
+ -- 但是如果有下降趋势，还是需要给一个合理的买入区间，不能盲目追高；
 - 止损和止盈设置
 - 订单调整建议（如修改限价订单价格）
 - 资金分配比例建议
+
 
 请用markdown格式回复，突出重点信息。持仓优化建议、订单管理建议、具体买入建议都以表格形式输出
 ======================================================================

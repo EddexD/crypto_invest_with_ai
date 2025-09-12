@@ -58,11 +58,35 @@ class PortfolioManager:
             current_price = current_prices.get(symbol, 0)
             
             if current_price > 0:
-                # 计算真实的购买成本
-                actual_cost = self._get_actual_purchase_cost(balance.currency)
+                # 获取基于交易记录的持仓信息
+                positions_data = self._get_position_data_from_trades(balance.currency)
                 
-                if actual_cost > 0:
-                    avg_price = actual_cost / balance.total
+                if positions_data and positions_data['amount'] > 0:
+                    # 检查交易记录计算的持仓与实际余额是否匹配
+                    amount_diff = abs(positions_data['amount'] - balance.total)
+                    tolerance = max(balance.total * 0.01, 0.00001)  # 1%的误差容忍度或最小值
+                    
+                    if amount_diff <= tolerance:
+                        # 匹配，使用交易记录计算的平均价格
+                        avg_price = positions_data['avg_price']
+                        actual_cost = positions_data['total_cost']
+                        logger.debug(f"{balance.currency}: 使用交易记录计算的平均价格 ${avg_price:.4f}")
+                    else:
+                        # 不匹配，可能有转入转出，需要调整
+                        if balance.total > positions_data['amount']:
+                            # 实际余额大于交易记录，可能有转入
+                            extra_amount = balance.total - positions_data['amount']
+                            # 假设转入的币种按当前价格计算成本
+                            adjusted_cost = positions_data['total_cost'] + (extra_amount * current_price)
+                            avg_price = adjusted_cost / balance.total
+                            actual_cost = adjusted_cost
+                            logger.info(f"{balance.currency}: 检测到可能的转入，调整平均价格 ${avg_price:.4f}")
+                        else:
+                            # 实际余额小于交易记录，可能有转出
+                            # 使用交易记录的平均价格
+                            avg_price = positions_data['avg_price']
+                            actual_cost = balance.total * avg_price
+                            logger.info(f"{balance.currency}: 检测到可能的转出，使用交易平均价格 ${avg_price:.4f}")
                 else:
                     # 如果没有交易记录，使用当前价格作为成本价（保守估算）
                     avg_price = current_price
@@ -102,7 +126,7 @@ class PortfolioManager:
     
     def _get_actual_purchase_cost(self, currency: str) -> float:
         """
-        获取实际购买成本（总花费的USDT金额）
+        获取实际购买成本（基于当前持仓的加权平均成本）
         
         Args:
             currency: 币种
@@ -111,31 +135,85 @@ class PortfolioManager:
             float: 实际购买成本
         """
         try:
-            # 直接从API获取交易记录，因为数据库可能没有完整的记录
-            if not hasattr(self, '_private_fetcher') or self._private_fetcher is None:
-                logger.warning(f"私有数据获取器未初始化，{currency} 无法获取购买成本")
+            positions_data = self._get_position_data_from_trades(currency)
+            if positions_data:
+                return positions_data['total_cost']
+            else:
                 return 0.0
+        except Exception as e:
+            logger.error(f"获取{currency}购买成本时出错: {e}")
+            return 0.0
+    
+    def _get_position_data_from_trades(self, currency: str) -> Optional[Dict]:
+        """
+        从交易记录获取持仓数据（数量、总成本、平均价格）
+        
+        Args:
+            currency: 币种
+            
+        Returns:
+            Dict: {'amount': float, 'total_cost': float, 'avg_price': float} 或 None
+        """
+        try:
+            # 直接从API获取交易记录
+            if not hasattr(self, '_private_fetcher') or self._private_fetcher is None:
+                logger.warning(f"私有数据获取器未初始化，{currency} 无法获取持仓数据")
+                return None
             
             # 获取该币种的所有交易记录
             symbol = f"{currency}/USDT"
             all_trades = self._private_fetcher.get_trades(symbol=symbol)
             
-            # 筛选买入交易
-            buy_trades = [trade for trade in all_trades if trade.side.value == 'buy']
+            if not all_trades:
+                logger.warning(f"没有找到{currency}的交易记录")
+                return None
             
-            if not buy_trades:
-                logger.warning(f"没有找到{currency}的买入交易记录")
-                return 0.0
+            # 按时间排序交易记录（从早到晚）
+            all_trades.sort(key=lambda x: x.timestamp)
             
-            # 计算总购买成本
-            total_cost = sum(trade.cost for trade in buy_trades)
-            logger.info(f"{currency} 总购买成本: ${total_cost:.2f}")
+            # 使用加权平均算法计算当前持仓
+            total_cost = 0.0
+            total_amount = 0.0
             
-            return total_cost
+            for trade in all_trades:
+                if trade.side.value == 'buy':
+                    # 买入：使用加权平均计算新的成本
+                    new_total_amount = total_amount + trade.amount
+                    if new_total_amount > 0:
+                        new_total_cost = total_cost + trade.cost
+                        total_cost = new_total_cost
+                        total_amount = new_total_amount
+                else:  # sell
+                    # 卖出：按当前平均成本减少持仓
+                    if total_amount >= trade.amount:
+                        if total_amount > 0:
+                            avg_cost_per_unit = total_cost / total_amount
+                        else:
+                            avg_cost_per_unit = 0
+                        
+                        total_amount -= trade.amount
+                        total_cost -= trade.amount * avg_cost_per_unit
+                        
+                        total_amount = max(0, total_amount)
+                        total_cost = max(0, total_cost)
+                    else:
+                        logger.warning(f"卖出数量({trade.amount})超过持仓({total_amount})，币种: {currency}")
+                        total_amount = 0
+                        total_cost = 0
+            
+            if total_amount > 0:
+                avg_price = total_cost / total_amount
+                return {
+                    'amount': total_amount,
+                    'total_cost': total_cost,
+                    'avg_price': avg_price
+                }
+            else:
+                return None
                 
         except Exception as e:
-            logger.error(f"获取{currency}购买成本时出错: {e}")
-            return 0.0
+            logger.error(f"获取{currency}持仓数据时出错: {e}")
+            return None
 
     def _calculate_average_cost(self, currency: str) -> float:
         """

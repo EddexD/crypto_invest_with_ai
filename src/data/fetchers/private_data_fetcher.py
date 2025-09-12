@@ -326,22 +326,47 @@ class PrivateDataFetcher:
         # 获取所有交易记录来计算平均成本
         trades = self.get_trades()
         
-        # 按币种分组计算平均成本
+        # 按时间排序交易记录（从早到晚）
+        trades.sort(key=lambda x: x.timestamp)
+        
+        # 按币种分组计算加权平均成本
         trade_cost_map = {}
         for trade in trades:
             currency = trade.symbol.split('/')[0]  # 提取基础币种，如 BTC/USDT -> BTC
             if currency not in trade_cost_map:
-                trade_cost_map[currency] = {'total_cost': 0, 'total_amount': 0}
+                trade_cost_map[currency] = {'total_cost': 0.0, 'total_amount': 0.0}
+            
+            current_data = trade_cost_map[currency]
             
             if trade.side.value == 'buy':
-                trade_cost_map[currency]['total_cost'] += trade.cost
-                trade_cost_map[currency]['total_amount'] += trade.amount
+                # 买入：使用加权平均计算新的成本价
+                new_total_amount = current_data['total_amount'] + trade.amount
+                if new_total_amount > 0:
+                    # 加权平均成本 = (原持仓成本 + 新买入成本) / 新总持仓
+                    new_total_cost = current_data['total_cost'] + trade.cost
+                    current_data['total_cost'] = new_total_cost
+                    current_data['total_amount'] = new_total_amount
             else:  # sell
-                # 对于卖出，从总成本和数量中减去
-                if trade_cost_map[currency]['total_amount'] > 0:
-                    avg_cost = trade_cost_map[currency]['total_cost'] / trade_cost_map[currency]['total_amount']
-                    trade_cost_map[currency]['total_cost'] -= trade.amount * avg_cost
-                    trade_cost_map[currency]['total_amount'] -= trade.amount
+                # 卖出：按当前平均成本减少持仓，保持剩余持仓的平均成本不变
+                if current_data['total_amount'] >= trade.amount:
+                    # 计算当前平均成本价（每个币的成本）
+                    if current_data['total_amount'] > 0:
+                        avg_cost_per_unit = current_data['total_cost'] / current_data['total_amount']
+                    else:
+                        avg_cost_per_unit = 0
+                    
+                    # 减少持仓数量和对应的总成本
+                    current_data['total_amount'] -= trade.amount
+                    current_data['total_cost'] -= trade.amount * avg_cost_per_unit
+                    
+                    # 确保数值不为负数
+                    current_data['total_amount'] = max(0, current_data['total_amount'])
+                    current_data['total_cost'] = max(0, current_data['total_cost'])
+                else:
+                    # 卖出数量超过持仓，清零（可能是之前的转入币种）
+                    logger.warning(f"卖出数量({trade.amount})超过持仓({current_data['total_amount']})，币种: {currency}")
+                    current_data['total_amount'] = 0
+                    current_data['total_cost'] = 0
         
         for balance in balances:
             if balance.currency != 'USDT' and balance.total > 0:
@@ -364,11 +389,37 @@ class PrivateDataFetcher:
                         continue
                     
                     # 计算真实平均成本价
-                    if balance.currency in trade_cost_map and trade_cost_map[balance.currency]['total_amount'] > 0:
-                        avg_price = trade_cost_map[balance.currency]['total_cost'] / trade_cost_map[balance.currency]['total_amount']
+                    if (balance.currency in trade_cost_map and 
+                        trade_cost_map[balance.currency]['total_amount'] > 0):
+                        
+                        trade_amount = trade_cost_map[balance.currency]['total_amount']
+                        trade_cost = trade_cost_map[balance.currency]['total_cost']
+                        
+                        # 如果交易记录的持仓数量与实际余额接近，使用交易记录计算的平均价格
+                        if abs(trade_amount - balance.total) / balance.total < 0.1:  # 10%的误差范围
+                            avg_price = trade_cost / trade_amount
+                            logger.debug(f"{balance.currency}: 使用交易记录计算平均价格 ${avg_price:.4f}")
+                        else:
+                            # 交易记录与实际余额差异较大，可能有转入转出
+                            # 按比例调整成本价
+                            calculated_avg_price = trade_cost / trade_amount
+                            
+                            if balance.total > trade_amount:
+                                # 实际余额大于交易记录，可能有转入
+                                # 假设转入的币种按当前价格计算
+                                extra_amount = balance.total - trade_amount
+                                total_cost = trade_cost + (extra_amount * current_price)
+                                avg_price = total_cost / balance.total
+                                logger.debug(f"{balance.currency}: 检测到可能的转入，调整平均价格 ${avg_price:.4f}")
+                            else:
+                                # 实际余额小于交易记录，可能有转出
+                                # 使用交易记录的平均价格
+                                avg_price = calculated_avg_price
+                                logger.debug(f"{balance.currency}: 检测到可能的转出，使用交易平均价格 ${avg_price:.4f}")
                     else:
                         # 如果没有交易记录，使用当前价格（可能是转入的币）
                         avg_price = current_price
+                        logger.debug(f"{balance.currency}: 无交易记录，使用当前价格 ${avg_price:.4f}")
                     
                     position = PositionModel(
                         symbol=symbol,
