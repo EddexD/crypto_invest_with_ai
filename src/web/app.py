@@ -9,6 +9,12 @@ from datetime import datetime, date, timedelta
 import logging
 from typing import Dict, List
 from functools import wraps
+import matplotlib
+matplotlib.use('Agg')  # 使用非交互式后端
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from matplotlib.font_manager import FontProperties
+import os
 
 # 导入我们的模块
 import sys
@@ -145,6 +151,8 @@ def save_daily_portfolio_snapshot():
         existing_snapshots = db_manager.get_daily_snapshots(days=1)
         if existing_snapshots and existing_snapshots[0]['date'] == today:
             logger.info("今日快照已存在，跳过保存")
+            if not os.path.exists(os.path.join(os.path.dirname(__file__), 'static', 'portfolio_latest.png')):
+                generate_portfolio_chart()
             return
         
         # 获取当前投资组合数据
@@ -194,8 +202,147 @@ def save_daily_portfolio_snapshot():
         
         logger.info(f"已保存{today}的投资组合快照: ${portfolio.total_value:.2f}")
         
+        # 生成资金变化图表
+        generate_portfolio_chart()
+        
     except Exception as e:
         logger.error(f"保存每日快照失败: {e}")
+
+def generate_portfolio_chart():
+    """生成USDT资金变化图表并保存到static目录"""
+    try:
+        # 获取最近30天的快照数据
+        snapshots = db_manager.get_daily_snapshots(days=30)
+        
+        if not snapshots or len(snapshots) < 2:
+            logger.warning("历史数据不足，无法生成图表")
+            return
+        
+        # 准备数据
+        dates = []
+        total_values = []
+        
+        # 按日期排序（从旧到新）
+        snapshots_sorted = sorted(snapshots, key=lambda x: x['date'])
+        
+        for snapshot in snapshots_sorted:
+            try:
+                date_obj = datetime.strptime(snapshot['date'], '%Y-%m-%d')
+                dates.append(date_obj)
+                total_values.append(float(snapshot['total_value']))
+            except Exception as e:
+                logger.warning(f"处理快照数据失败: {e}")
+                continue
+        
+        if len(dates) < 2:
+            logger.warning("有效数据不足，无法生成图表")
+            return
+        
+        # 设置字体
+        plt.rcParams['font.family'] = 'DejaVu Sans'
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        # 创建单个图表
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+        fig.suptitle('USDT Portfolio Value Trend', fontsize=18, fontweight='bold')
+        
+        # 绘制USDT总价值变化
+        ax.plot(dates, total_values, 'b-', linewidth=3, label='Total Value (USDT)', marker='o', markersize=6)
+        ax.fill_between(dates, total_values, alpha=0.3, color='blue')
+        ax.set_ylabel('Amount (USDT)', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Date', fontsize=14, fontweight='bold')
+        ax.set_title('Portfolio Total Value Change', fontsize=16)
+        ax.legend(fontsize=12)
+        ax.grid(True, alpha=0.3)
+        
+        # 格式化日期显示
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(dates)//8)))
+        
+        # 添加数值标签
+        for i, (date, value) in enumerate(zip(dates, total_values)):
+            if i % max(1, len(dates)//5) == 0 or i == len(dates)-1:
+                ax.annotate(f'${value:.0f}', 
+                           (date, value), 
+                           textcoords="offset points", 
+                           xytext=(0,15), 
+                           ha='center',
+                           fontsize=10,
+                           fontweight='bold',
+                           bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
+        
+        # 添加统计信息
+        latest_value = total_values[-1]
+        initial_value = total_values[0]
+        value_change = latest_value - initial_value
+        change_percent = (value_change / initial_value * 100) if initial_value > 0 else 0
+        
+        # 统计信息文本（英文）
+        stats_text = f'Current Value: ${latest_value:.2f} USDT\n'
+        stats_text += f'Initial Value: ${initial_value:.2f} USDT\n'
+        stats_text += f'Change Amount: ${value_change:.2f} USDT\n'
+        stats_text += f'Change Rate: {change_percent:.2f}%'
+        
+        # 在图表右上角添加统计信息
+        ax.text(0.98, 0.98, stats_text, 
+                transform=ax.transAxes, 
+                fontsize=11,
+                verticalalignment='top',
+                horizontalalignment='right',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.8))
+        
+        # 设置Y轴范围，添加一些边距
+        y_min, y_max = min(total_values), max(total_values)
+        y_range = y_max - y_min
+        ax.set_ylim(y_min - y_range * 0.1, y_max + y_range * 0.1)
+        
+        # 调整布局
+        plt.tight_layout()
+        
+        # 确保static目录存在
+        static_dir = os.path.join(os.path.dirname(__file__), 'static')
+        os.makedirs(static_dir, exist_ok=True)
+        
+        # 保存图表
+        # chart_filename = f'portfolio_chart_{datetime.now().strftime("%Y%m%d")}.png'
+        # chart_path = os.path.join(static_dir, chart_filename)
+        # plt.savefig(chart_path, dpi=300, bbox_inches='tight', facecolor='white')
+        
+        # 同时保存一个固定名称的文件供前端使用
+        latest_chart_path = os.path.join(static_dir, 'portfolio_latest.png')
+        plt.savefig(latest_chart_path, dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close()  # 关闭图形以释放内存
+        
+        logger.info(f"USDT Portfolio Value Chart saved: portfolio_latest.png")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate USDT portfolio chart: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+@app.route('/api/portfolio/chart')
+def get_portfolio_chart():
+    """获取投资组合图表"""
+    try:
+        static_dir = os.path.join(os.path.dirname(__file__), 'static')
+        chart_path = os.path.join(static_dir, 'portfolio_latest.png')
+        
+        if os.path.exists(chart_path):
+            # 获取文件修改时间
+            mtime = os.path.getmtime(chart_path)
+            return jsonify({
+                'chart_available': True,
+                'chart_url': '/static/portfolio_latest.png',
+                'last_updated': datetime.fromtimestamp(mtime).isoformat()
+            })
+        else:
+            return jsonify({
+                'chart_available': False,
+                'message': '图表文件不存在，请先保存快照'
+            })
+    except Exception as e:
+        logger.error(f"获取图表信息失败: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/portfolio/save_snapshot', methods=['POST'])
 @check_ip_whitelist
@@ -866,33 +1013,7 @@ def get_trades():
             'trades': []
         }), 500
 
-@app.route('/api/ai_history')
-def get_ai_history():
-    """获取AI建议历史"""
-    try:
-        days = request.args.get('days', 7, type=int)
-        symbol = request.args.get('symbol')
-        
-        history = db_manager.get_ai_recommendations(symbol, days)
-        
-        return jsonify({'ai_history': history})
-    
-    except Exception as e:
-        logger.error(f"获取AI建议历史失败: {e}")
-        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/statistics')
-def get_statistics():
-    """获取交易统计"""
-    try:
-        days = request.args.get('days', 30, type=int)
-        stats = db_manager.get_trading_statistics(days)
-        
-        return jsonify({'statistics': stats})
-    
-    except Exception as e:
-        logger.error(f"获取交易统计失败: {e}")
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # 初始化

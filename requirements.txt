@@ -21,6 +21,8 @@ requests>=2.31.0            # HTTP请求
 
 # 数据可视化（用于图表）
 plotly>=5.17.0              # 交互式图表
+matplotlib
+numpy
 
 # 开发和测试
 pytest>=7.4.0               # 测试框架
