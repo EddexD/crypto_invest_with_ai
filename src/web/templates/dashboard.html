@@ -202,23 +202,59 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
+            font-size: 0.9em; /* 减小字体大小 */
+            overflow-x: auto; /* 允许水平滚动 */
         }
 
         .table th,
         .table td {
-            padding: 12px;
+            padding: 8px 6px; /* 减小内边距 */
             text-align: left;
             border-bottom: 1px solid #e0e0e0;
+            white-space: nowrap; /* 防止文字换行 */
         }
 
         .table th {
             background: #f5f5f5;
             font-weight: bold;
             color: #333;
+            font-size: 0.85em; /* 表头字体更小 */
         }
 
         .table tr:hover {
             background: #f9f9f9;
+        }
+
+        /* 持仓详情表格的特殊样式 */
+        #positions .table {
+            font-size: 0.8em; /* 持仓表格字体更小 */
+        }
+
+        #positions .table th,
+        #positions .table td {
+            padding: 6px 4px; /* 持仓表格内边距更小 */
+        }
+
+        /* 为表格添加滚动容器 */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* iOS平滑滚动 */
+        }
+
+        /* 响应式优化 */
+        @media (max-width: 768px) {
+            .table {
+                font-size: 0.75em;
+            }
+            
+            .table th,
+            .table td {
+                padding: 4px 2px;
+            }
+            
+            #positions .table {
+                font-size: 0.7em;
+            }
         }
 
         .chart-container {
@@ -644,13 +680,14 @@
                 return;
             }
             
-            let html = '<table class="table"><tr><th>币种</th><th>数量</th><th>市值</th><th>盈亏</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>币种</th><th>数量</th><th>均价</th><th>市值</th><th>盈亏</th></tr>';
             
             positions.forEach(pos => {
                 html += `
                     <tr>
                         <td>${pos.currency}</td>
                         <td>${pos.amount?.toFixed(4) || '0'}</td>
+                        <td>$${pos.avg_price?.toFixed(2) || '0.00'}</td>
                         <td>$${pos.market_value?.toFixed(2) || '0.00'}</td>
                         <td class="${pos.unrealized_pnl >= 0 ? 'positive' : 'negative'}">
                             $${pos.unrealized_pnl?.toFixed(2) || '0.00'}
@@ -659,7 +696,7 @@
                 `;
             });
             
-            html += '</table>';
+            html += '</table></div>';
             container.innerHTML = html;
         }
 
@@ -690,7 +727,7 @@
                 return;
             }
             
-            let html = '<table class="table"><tr><th>交易对</th><th>价格</th><th>24h变化</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>价格</th><th>24h变化</th></tr>';
             
             Object.entries(marketData).forEach(([symbol, data]) => {
                 html += `
@@ -704,7 +741,7 @@
                 `;
             });
             
-            html += '</table>';
+            html += '</table></div>';
             container.innerHTML = html;
         }
 
@@ -1321,7 +1358,7 @@
                 return;
             }
             
-            let html = '<table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>状态</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>状态</th></tr>';
             
             orders.forEach(order => {
                 const sideClass = order.side === 'buy' ? 'positive' : 'negative';
@@ -1407,7 +1444,7 @@
                 `;
             });
             
-            html += '</table>';
+            html += '</table></div>';
             container.innerHTML = html;
         }
 
@@ -1438,7 +1475,7 @@
                 return;
             }
             
-            let html = '<table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>时间</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>时间</th></tr>';
             
             trades.slice(0, 10).forEach(trade => {
                 // 格式化数量，最多显示6位小数
@@ -1464,7 +1501,7 @@
                 `;
             });
             
-            html += '</table>';
+            html += '</table></div>';
             container.innerHTML = html;
         }
 
