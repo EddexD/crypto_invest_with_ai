@@ -1001,7 +1001,7 @@ def get_trades():
                     'amount': trade.amount,
                     'price': trade.price,
                     'cost': trade.cost,
-                    'fee': trade.fee,
+                    'fee': trade.fee*trade.price if trade.side == 'buy' else trade.fee,
                     'datetime': trade.datetime_str
                 } for trade in trades
             ]
