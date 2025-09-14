@@ -953,6 +953,7 @@ def get_orders():
                     'amount': order.amount,
                     'price': order.price,
                     'filled': order.filled,
+                    'cost': order.cost if hasattr(order, 'cost') else (order.price * order.filled if hasattr(order, 'price') and hasattr(order, 'filled') else 0),
                     'status': order.status.value if hasattr(order.status, 'value') else str(order.status),
                     'datetime': order.datetime_str
                 } for order in open_orders

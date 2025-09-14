@@ -337,6 +337,145 @@
             .container {
                 padding: 10px;
             }
+            
+            /* AI分析卡片特殊优化 */
+            .card:has(.analysis-container),
+            .card:has(.basic-analysis-container) {
+                padding: 8px !important;
+                margin: 10px 5px !important;
+            }
+            
+            .card h3 {
+                font-size: 1.1em;
+                margin-bottom: 10px;
+                padding: 0 5px;
+            }
+
+            /* AI分析内容移动端优化 */
+            .analysis-container {
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                max-width: 100%;
+                width: 100% !important;
+                padding: 0 5px !important;
+            }
+
+            .analysis-section {
+                margin-bottom: 15px !important;
+                width: 100% !important;
+            }
+
+            .analysis-section div {
+                padding: 15px !important;
+                font-size: 0.9em !important;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                hyphens: auto;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            .confidence-indicator {
+                flex-wrap: wrap;
+                margin-bottom: 15px !important;
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                gap: 10px !important;
+                width: 100% !important;
+            }
+
+            .confidence-indicator span {
+                font-size: 0.9em;
+                margin: 0;
+                flex-shrink: 0;
+            }
+
+            .confidence-bar {
+                flex: 1 !important;
+                min-width: 80px !important;
+                max-width: 120px !important;
+                margin: 0 !important;
+            }
+
+            /* 基础分析容器优化 */
+            .basic-analysis-container {
+                max-width: 100%;
+                overflow-x: hidden;
+                width: 100% !important;
+                padding: 0 5px !important;
+            }
+
+            .basic-analysis-container div[style*="grid"] {
+                display: block !important;
+                grid-template-columns: none !important;
+                width: 100% !important;
+            }
+
+            .basic-analysis-container div[style*="grid"] > div {
+                margin-bottom: 10px;
+                padding: 12px;
+                font-size: 0.9em;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+
+            /* 长文本内容优化 */
+            h3, h4, h5 {
+                font-size: 1em !important;
+                line-height: 1.3;
+                margin: 10px 0 5px 0 !important;
+                word-wrap: break-word;
+            }
+
+            /* 统计信息文本优化 */
+            div[style*="text-align: center"] {
+                font-size: 0.8em !important;
+                line-height: 1.4;
+                padding: 0 5px;
+            }
+
+            /* 防止代码或长单词溢出 */
+            code, pre {
+                word-break: break-all;
+                white-space: pre-wrap;
+                max-width: 100%;
+                overflow-x: auto;
+            }
+
+            /* 表格在AI分析中的优化 */
+            .analysis-container .table-container {
+                font-size: 0.7em;
+            }
+        }
+
+        /* AI分析内容样式优化 */
+        .analysis-container {
+            max-width: 100%;
+            overflow-x: hidden;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .analysis-section {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+
+        .analysis-section div {
+            max-width: 100%;
+            overflow-x: hidden;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* 防止长URL或代码块溢出 */
+        .analysis-container p,
+        .analysis-container div,
+        .analysis-container span {
+            word-break: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
         }
 
         /* 异步分析样式 */
@@ -1231,24 +1370,24 @@
                 let html = `
                     <div class="analysis-container">
                         <!-- AI置信度指示器 -->
-                        <div class="confidence-indicator" style="margin-bottom: 20px;">
-                            <span style="font-weight: bold;">AI分析置信度:</span>
-                            <div class="confidence-bar" style="display: inline-block; width: 100px; height: 20px; background: #f0f0f0; border-radius: 10px; margin-left: 10px; position: relative;">
+                        <div class="confidence-indicator" style="margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; width: 100%;">
+                            <span style="font-weight: bold; margin-right: 10px; flex-shrink: 0;">AI分析置信度:</span>
+                            <div class="confidence-bar" style="display: inline-block; width: 100px; height: 20px; background: #f0f0f0; border-radius: 10px; margin: 0 10px; position: relative; flex: 1; max-width: 120px;">
                                 <div style="width: ${(analysisData.ai_confidence * 100)}%; height: 100%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); border-radius: 10px;"></div>
                             </div>
-                            <span style="margin-left: 10px; font-weight: bold;">${(analysisData.ai_confidence * 100).toFixed(1)}%</span>
+                            <span style="font-weight: bold; white-space: nowrap; flex-shrink: 0;">${(analysisData.ai_confidence * 100).toFixed(1)}%</span>
                         </div>
 
                         <!-- 原始AI分析内容 -->
-                        <div class="analysis-section" style="margin-bottom: 20px;">
-                            <h4 style="color: #2c3e50; margin-bottom: 10px;">🤖 OpenAI AI 投资分析</h4>
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; line-height: 1.6; font-size: 0.95em;">
+                        <div class="analysis-section" style="margin-bottom: 20px; width: 100%;">
+                            <h4 style="color: #2c3e50; margin-bottom: 10px; word-wrap: break-word;">🤖 OpenAI AI 投资分析</h4>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; line-height: 1.6; font-size: 0.95em; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; overflow-x: hidden; width: 100%; box-sizing: border-box;">
                                 ${analysisData.ai_response}
                             </div>
                         </div>
 
                         <!-- 分析时间戳 -->
-                        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 0.9em;">
+                        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 0.9em; word-wrap: break-word;">
                             分析时间: ${new Date(analysisData.analysis_timestamp).toLocaleString('zh-CN')}
                         </div>
                     </div>
@@ -1262,20 +1401,20 @@
                 let html = `
                     <div class="analysis-container">
                         <!-- AI置信度指示器 -->
-                        <div class="confidence-indicator" style="margin-bottom: 20px;">
-                            <span style="font-weight: bold;">分析置信度:</span>
-                            <div class="confidence-bar" style="display: inline-block; width: 100px; height: 20px; background: #f0f0f0; border-radius: 10px; margin-left: 10px; position: relative;">
+                        <div class="confidence-indicator" style="margin-bottom: 20px; display: flex; align-items: center; flex-wrap: wrap; width: 100%;">
+                            <span style="font-weight: bold; margin-right: 10px; flex-shrink: 0;">分析置信度:</span>
+                            <div class="confidence-bar" style="display: inline-block; width: 100px; height: 20px; background: #f0f0f0; border-radius: 10px; margin: 0 10px; position: relative; flex: 1; max-width: 120px;">
                                 <div style="width: ${(analysisData.ai_confidence * 100)}%; height: 100%; background: linear-gradient(90deg, #28a745, #ffc107, #dc3545); border-radius: 10px;"></div>
                             </div>
-                            <span style="margin-left: 10px; font-weight: bold;">${(analysisData.ai_confidence * 100).toFixed(1)}%</span>
+                            <span style="font-weight: bold; white-space: nowrap; flex-shrink: 0;">${(analysisData.ai_confidence * 100).toFixed(1)}%</span>
                         </div>
 
                         
                         <!-- 风险评估 -->
                         ${analysisData.risk_assessment ? `
-                        <div class="analysis-section" style="margin-bottom: 20px;">
-                            <h4 style="color: #2c3e50; margin-bottom: 10px;">📊  市场趋势分析</h4>
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545; line-height: 1.6;">
+                        <div class="analysis-section" style="margin-bottom: 20px; width: 100%;">
+                            <h4 style="color: #2c3e50; margin-bottom: 10px; word-wrap: break-word;">📊  市场趋势分析</h4>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #dc3545; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; overflow-x: hidden; width: 100%; box-sizing: border-box;">
                                 ${analysisData.risk_assessment}
                             </div>
                         </div>
@@ -1283,16 +1422,16 @@
 
                         <!-- 市场分析 -->
                         ${analysisData.market_analysis ? `
-                        <div class="analysis-section" style="margin-bottom: 20px;">
-                            <h4 style="color: #2c3e50; margin-bottom: 10px;">📊 币种分析</h4>
-                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; line-height: 1.6;">
+                        <div class="analysis-section" style="margin-bottom: 20px; width: 100%;">
+                            <h4 style="color: #2c3e50; margin-bottom: 10px; word-wrap: break-word;">📊 币种分析</h4>
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; line-height: 1.6; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; overflow-x: hidden; width: 100%; box-sizing: border-box;">
                                 ${analysisData.market_analysis}
                             </div>
                         </div>
                         ` : ''}
 
                         <!-- 分析时间戳 -->
-                        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 0.9em;">
+                        <div style="text-align: center; margin-top: 20px; color: #666; font-size: 0.9em; word-wrap: break-word;">
                             分析时间: ${new Date(analysisData.analysis_timestamp).toLocaleString('zh-CN')}
                         </div>
                     </div>
@@ -1358,7 +1497,7 @@
                 return;
             }
             
-            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>状态</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>金额</th><th>状态</th></tr>';
             
             orders.forEach(order => {
                 const sideClass = order.side === 'buy' ? 'positive' : 'negative';
@@ -1433,12 +1572,17 @@
                 const formattedAmount = formatAmount(order.amount, order.symbol);
                 const formattedPrice = formatPrice(order.price);
                 
+                // 格式化订单金额
+                const formattedCost = order.cost ? `$${parseFloat(order.cost).toFixed(2)}` : 
+                    (order.price && order.amount ? `$${(parseFloat(order.price) * parseFloat(order.amount)).toFixed(2)}` : '-');
+                
                 html += `
                     <tr>
                         <td>${order.symbol}</td>
                         <td class="${sideClass}">${sideText} ${typeText}</td>
                         <td>${formattedAmount}</td>
                         <td>$${formattedPrice}</td>
+                        <td>${formattedCost}</td>
                         <td><span style="color: ${statusColor};">${statusText}</span></td>
                     </tr>
                 `;
@@ -1475,11 +1619,17 @@
                 return;
             }
             
-            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>时间</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>交易对</th><th>类型</th><th>数量</th><th>价格</th><th>总金额</th><th>手续费</th><th>时间</th></tr>';
             
             trades.slice(0, 10).forEach(trade => {
                 // 格式化数量，最多显示6位小数
                 const formattedAmount = parseFloat(trade.amount).toFixed(6).replace(/\.?0+$/, '');
+                
+                // 格式化总金额
+                const formattedCost = trade.cost ? `$${parseFloat(trade.cost).toFixed(2)}` : '-';
+                
+                // 格式化手续费
+                const formattedFee = trade.fee ? `$${parseFloat(trade.fee).toFixed(4)}` : '-';
                 
                 // 格式化时间显示
                 const formattedDateTime = trade.datetime ? 
@@ -1496,6 +1646,8 @@
                         <td class="${trade.side === 'buy' ? 'positive' : 'negative'}">${trade.side}</td>
                         <td>${formattedAmount}</td>
                         <td>$${trade.price?.toFixed(2)}</td>
+                        <td>${formattedCost}</td>
+                        <td style="color: #dc3545; font-size: 0.9em;">${formattedFee}</td>
                         <td style="font-size: 0.9em; color: #666;">${formattedDateTime}</td>
                     </tr>
                 `;
