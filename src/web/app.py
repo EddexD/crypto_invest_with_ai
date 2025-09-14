@@ -284,7 +284,7 @@ def generate_portfolio_chart():
         stats_text += f'Change Rate: {change_percent:.2f}%'
         
         # 在图表右上角添加统计信息
-        ax.text(0.98, 0.98, stats_text, 
+        ax.text(0.5, 0.98, stats_text, 
                 transform=ax.transAxes, 
                 fontsize=11,
                 verticalalignment='top',
