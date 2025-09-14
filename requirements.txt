@@ -7,6 +7,7 @@ numpy>=1.24.0               # 数值计算
 
 # Web框架
 Flask>=2.3.0                # Web框架
+Flask-SocketIO>=5.3.0       # WebSocket支持
 Jinja2>=3.1.0               # 模板引擎
 
 # 数据库

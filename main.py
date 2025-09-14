@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 def main():
     """主函数"""
     
-    from src.web.app import app
-    app.run(host='127.0.0.1', port=6998, debug=False)
+    from src.web.app import app, socketio
+    logger.info("启动WebSocket服务器...")
+    socketio.run(app, host='127.0.0.1', port=6998, debug=False)
 
 if __name__ == "__main__":
     main()

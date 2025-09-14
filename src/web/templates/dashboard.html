@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智能加密货币投资助手</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -299,14 +300,29 @@
             height: 10px;
             border-radius: 50%;
             margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
         }
 
         .status-online {
             background: #4CAF50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
         }
 
         .status-offline {
             background: #f44336;
+            box-shadow: 0 0 10px rgba(244, 67, 54, 0.5);
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
         }
 
         @media (max-width: 768px) {
@@ -601,8 +617,11 @@
             <div style="margin-top: 15px;">
                 <span class="status-indicator" id="statusIndicator"></span>
                 <span id="statusText">连接中...</span>
+                <span id="wsStatus" style="margin-left: 20px; font-size: 0.9em; color: #666;"></span>
                 <button class="refresh-btn" onclick="refreshAllData()" style="margin-left: 20px;">刷新数据</button>
                 <button class="refresh-btn" onclick="saveSnapshot()" style="margin-left: 10px;">保存快照</button>
+                <button class="refresh-btn" onclick="toggleWebSocket()" style="margin-left: 10px;" id="wsToggleBtn">重连WS</button>
+                <button class="refresh-btn" onclick="toggleWebSocket()" style="margin-left: 10px;" id="wsToggleBtn">重连WebSocket</button>
             </div>
         </div>
 
@@ -681,60 +700,274 @@
     <script>
         let portfolioChart = null;
         let currentAnalysisTaskId = null; // 当前分析任务ID
+        let socket = null; // WebSocket连接
+        let pendingForceRefresh = false; // 记录待处理的强制刷新状态
+        let lastDataRequestTime = 0; // 记录最后一次数据请求时间
+
+        // 初始化WebSocket连接
+        function initWebSocket() {
+            // 配置Socket.IO选项以优化连接
+            socket = io({
+                transports: ['websocket', 'polling'], // 优先使用websocket
+                upgrade: true, // 允许升级到websocket
+                rememberUpgrade: true, // 记住升级状态
+                timeout: 10000, // 连接超时时间
+                reconnection: true, // 自动重连
+                reconnectionDelay: 2000, // 重连延迟
+                reconnectionDelayMax: 10000, // 最大重连延迟
+                maxReconnectionAttempts: 5, // 最大重连次数
+                forceNew: false // 不强制创建新连接
+            });
+            
+            // 连接成功事件
+            socket.on('connect', function() {
+                console.log('WebSocket连接成功，传输方式:', socket.io.engine.transport.name);
+                updateStatus('online');
+                // 请求初始数据（包含基础分析）
+                socket.emit('request_data', {type: 'all'});
+                lastDataRequestTime = Date.now(); // 记录请求时间
+            });
+            
+            // 传输升级事件
+            socket.io.on('upgrade', function() {
+                console.log('连接已升级到WebSocket');
+            });
+            
+            // 连接断开事件
+            socket.on('disconnect', function(reason) {
+                console.log('WebSocket连接断开，原因:', reason);
+                updateStatus('offline');
+            });
+            
+            // 投资组合数据更新
+            socket.on('portfolio_update', function(data) {
+                console.log('收到投资组合数据更新', data);
+                updatePortfolioOverview(data);
+                updatePositions(data.positions);
+            });
+            
+            // 市场数据更新
+            socket.on('market_update', function(data) {
+                console.log('收到市场数据更新', data);
+                updateMarketData(data.market_data);
+            });
+            
+            // 订单数据更新
+            socket.on('orders_update', function(data) {
+                console.log('收到订单数据更新', data);
+                updateOpenOrders(data.open_orders);
+            });
+            
+            // 交易数据更新
+            socket.on('trades_update', function(data) {
+                console.log('收到交易数据更新', data);
+                updateRecentTrades(data.trades);
+            });
+            
+            // 投资组合历史数据更新
+            socket.on('portfolio_history_update', function(data) {
+                console.log('收到投资组合历史数据更新', data);
+                updatePortfolioChart(data);
+            });
+            
+            // 投资组合历史数据错误
+            socket.on('portfolio_history_error', function(data) {
+                console.error('投资组合历史数据错误:', data.error);
+                // 可以在这里显示错误信息
+            });
+            
+            // 基础分析数据更新
+            socket.on('basic_analysis_update', function(data) {
+                console.log('收到基础分析数据更新', data);
+                updateBasicAnalysis(data.analysis);
+            });
+            
+            // 基础分析错误
+            socket.on('basic_analysis_error', function(data) {
+                console.error('基础分析错误:', data.error);
+                document.getElementById('smartAnalysis').innerHTML = 
+                    `<div class="error">获取基础分析失败: ${data.error}</div>`;
+            });
+            
+            // 智能分析任务启动
+            socket.on('smart_analysis_started', function(data) {
+                console.log('智能分析任务已启动:', data);
+                currentAnalysisTaskId = data.task_id;
+                
+                // 显示分析进度界面
+                const container = document.getElementById('smartAnalysis');
+                
+                // 创建AI分析进度元素
+                const aiAnalysisDiv = document.createElement('div');
+                aiAnalysisDiv.id = 'aiAnalysisProgress';
+                aiAnalysisDiv.innerHTML = `
+                    <div class="analysis-loading" style="margin-bottom: 20px;">
+                        <div class="loading-spinner"></div>
+                        <h3>🤖 OpenAI AI分析进行中...</h3>
+                        <p>正在为您提供更深入的智能分析...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="analysisProgress" style="width: 10%;"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">准备中...</div>
+                        <button class="cancel-btn" onclick="cancelAnalysis()">取消AI分析</button>
+                    </div>
+                `;
+                
+                // 将AI分析进度插入到基础分析的顶部
+                const basicAnalysisContainer = container.querySelector('.basic-analysis-container');
+                if (basicAnalysisContainer) {
+                    // 如果有基础分析，插入到基础分析之前
+                    container.insertBefore(aiAnalysisDiv, basicAnalysisContainer);
+                } else {
+                    // 如果没有基础分析，直接添加到容器中
+                    container.appendChild(aiAnalysisDiv);
+                }
+                
+                // 开始轮询状态
+                startWebSocketPolling(data.task_id);
+            });
+            
+            // 智能分析错误
+            socket.on('smart_analysis_error', function(data) {
+                console.error('智能分析错误:', data.error);
+                document.getElementById('smartAnalysis').innerHTML = 
+                    `<div class="error">启动智能分析失败: ${data.error}</div>`;
+            });
+            
+            // 分析状态更新
+            socket.on('analysis_status_update', function(data) {
+                console.log('分析状态更新:', data);
+                handleAnalysisStatusUpdate(data);
+            });
+            
+            // 分析状态错误
+            socket.on('analysis_status_error', function(data) {
+                console.error('分析状态错误:', data.error);
+                currentAnalysisTaskId = null;
+            });
+            
+            // 连接错误处理
+            socket.on('connect_error', function(error) {
+                console.error('WebSocket连接错误:', error);
+                updateStatus('offline');
+            });
+            
+            // 快照保存成功
+            socket.on('snapshot_save_success', function(data) {
+                console.log('快照保存成功:', data);
+                alert('✅ 快照保存成功！');
+            });
+            
+            // 快照保存失败
+            socket.on('snapshot_save_error', function(data) {
+                console.error('快照保存失败:', data.error);
+                alert('❌ 保存失败: ' + data.error);
+            });
+        }
 
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
-            refreshAllData();
-            // 第一次加载时启动智能分析
-            loadSmartAnalysis();
-            // 每分钟自动刷新一次（不包括智能分析）
-            setInterval(refreshAllData, 60000);
+            // 初始化WebSocket连接
+            initWebSocket();
+            
+            // 投资组合图表将在接收到历史数据后自动更新
+            // WebSocket 'all' 请求已经包含历史数据，无需额外请求
+            
+            // 智能分析将在WebSocket连接成功后自动启动
+            
+            // 页面可见性检测
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    // 页面隐藏时可以暂停某些更新
+                    console.log('页面隐藏，减少WebSocket活动');
+                } else {
+                    // 页面可见时恢复更新
+                    console.log('页面可见，恢复WebSocket活动');
+                    if (socket && socket.connected) {
+                        // 防抖：限制请求频率，避免频繁切换页面时的重复请求
+                        const now = Date.now();
+                        if (now - lastDataRequestTime > 5000) { // 5秒内不重复请求
+                            console.log('页面重新可见，刷新数据');
+                            socket.emit('request_data', {type: 'all'});
+                            lastDataRequestTime = now;
+                        } else {
+                            console.log('请求频率限制，跳过此次刷新');
+                        }
+                    }
+                }
+            });
+            
+            // 每5分钟自动刷新智能分析（仅在页面可见时）
+            setInterval(() => {
+                if (document.hidden) return; // 页面不可见时不刷新
+                loadSmartAnalysis(false); // 定时刷新不使用强制刷新
+            }, 300000); // 5分钟
         });
 
         // 保存投资组合快照
-        async function saveSnapshot() {
+        function saveSnapshot() {
             try {
-                const response = await fetch('/api/portfolio/save_snapshot', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    alert('✅ 快照保存成功！');
-                    // 重新加载投资组合数据
-                    loadPortfolioData();
+                if (socket && socket.connected) {
+                    // 使用WebSocket发送保存快照请求
+                    socket.emit('save_snapshot', {});
                 } else {
-                    alert('❌ 保存失败: ' + (data.error || '未知错误'));
+                    // WebSocket未连接时的备用方案
+                    console.warn('WebSocket未连接，使用HTTP API备用方案');
+                    // saveSnapshotHTTP();
                 }
             } catch (error) {
+                console.error('保存快照失败:', error);
                 alert('❌ 保存失败: ' + error.message);
             }
         }
-
+        
+        
         // 刷新所有数据
-        async function refreshAllData() {
-            updateStatus('connecting');
+        function refreshAllData() {
+            if (socket && socket.connected) {
+                updateStatus('connecting');
+                socket.emit('request_data', {type: 'all'});
+                lastDataRequestTime = Date.now(); // 记录请求时间
+            } else {
+                // 如果WebSocket未连接，尝试重新连接
+                console.log('WebSocket未连接，尝试重新连接...');
+                if (socket) {
+                    socket.disconnect();
+                }
+                initWebSocket();
+            }
+        }
+        
+        // 手动请求特定数据
+        function requestDataUpdate(dataType) {
+            if (socket && socket.connected) {
+                socket.emit('request_data', {type: dataType});
+            }
+        }
+        
+        // WebSocket重连功能
+        function toggleWebSocket() {
+            const btn = document.getElementById('wsToggleBtn');
             
-            try {
-                const loadTasks = [
-                    loadPortfolioData(),
-                    loadMarketData(),
-                    loadOrders(),
-                    loadTrades()
-                ];
-                
-                // 不再自动加载智能分析，只有用户主动点击才加载
-                // loadTasks.push(loadSmartAnalysis());
-                
-                await Promise.all(loadTasks);
-                updateStatus('online');
-            } catch (error) {
-                console.error('刷新数据失败:', error);
+            if (socket && socket.connected) {
+                // 断开连接
+                socket.disconnect();
+                btn.textContent = '重连WebSocket';
                 updateStatus('offline');
+            } else {
+                // 重新连接
+                btn.textContent = '连接中...';
+                btn.disabled = true;
+                
+                if (socket) {
+                    socket.disconnect();
+                }
+                
+                setTimeout(() => {
+                    initWebSocket();
+                    btn.disabled = false;
+                    btn.textContent = socket && socket.connected ? '断开WebSocket' : '重连WebSocket';
+                }, 1000);
             }
         }
 
@@ -742,45 +975,55 @@
         function updateStatus(status) {
             const indicator = document.getElementById('statusIndicator');
             const text = document.getElementById('statusText');
+            const wsStatus = document.getElementById('wsStatus');
+            const wsToggleBtn = document.getElementById('wsToggleBtn');
             
             if (status === 'online') {
                 indicator.className = 'status-indicator status-online';
                 text.textContent = '已连接';
+                if (socket && socket.connected) {
+                    const transport = socket.io.engine ? socket.io.engine.transport.name : 'unknown';
+                    wsStatus.textContent = `WebSocket`;
+                    wsStatus.style.color = '#28a745';
+                    wsToggleBtn.textContent = '断开WS';
+                } else {
+                    wsStatus.textContent = 'HTTP API';
+                    wsStatus.style.color = '#ffc107';
+                    wsToggleBtn.textContent = '连接WS';
+                }
             } else if (status === 'offline') {
                 indicator.className = 'status-indicator status-offline';
                 text.textContent = '连接失败';
-            } else {
+                wsStatus.textContent = '离线';
+                wsStatus.style.color = '#dc3545';
+                wsToggleBtn.textContent = '重连WS';
+            } else if (status === 'connecting') {
                 indicator.className = 'status-indicator';
                 text.textContent = '连接中...';
+                wsStatus.textContent = '正在连接...';
+                wsStatus.style.color = '#6c757d';
+                wsToggleBtn.textContent = '连接中...';
             }
         }
 
-        // 加载投资组合数据
-        async function loadPortfolioData() {
+        // 加载投资组合历史数据（用于图表）
+        function loadPortfolioHistory() {
             try {
-                const response = await fetch('/api/portfolio');
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
+                if (socket && socket.connected) {
+                    // 通过WebSocket请求历史数据
+                    socket.emit('request_data', { type: 'portfolio_history' });
+                } else {
+                    // WebSocket未连接时使用HTTP API作为备用
+                    // loadPortfolioHistoryHTTP();
                 }
-                
-                updatePortfolioOverview(data);
-                updatePositions(data.positions);
-                
-                // 加载历史数据用于图表
-                const historyResponse = await fetch('/api/portfolio/history');
-                const historyData = await historyResponse.json();
-                
-                if (!historyData.error) {
-                    updatePortfolioChart(historyData);
-                }
-                
             } catch (error) {
-                document.getElementById('portfolioOverview').innerHTML = 
-                    `<div class="error">加载失败: ${error.message}</div>`;
+                console.error('请求投资组合历史数据失败:', error);
+                // 备用方案
+                // loadPortfolioHistoryHTTP();
             }
         }
+
+      
 
         // 更新投资组合概览
         function updatePortfolioOverview(data) {
@@ -839,23 +1082,7 @@
             container.innerHTML = html;
         }
 
-        // 加载市场数据
-        async function loadMarketData() {
-            try {
-                const response = await fetch('/api/market_data');
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                updateMarketData(data.market_data);
-                
-            } catch (error) {
-                document.getElementById('marketData').innerHTML = 
-                    `<div class="error">加载失败: ${error.message}</div>`;
-            }
-        }
+      
 
         // 更新市场数据
         function updateMarketData(marketData) {
@@ -884,7 +1111,7 @@
             container.innerHTML = html;
         }
 
-        // 加载智能分析（异步版本）
+        // 加载智能分析（WebSocket版本）
         async function loadSmartAnalysis(forceRefresh = false) {
             try {
                 // 如果已有正在进行的任务，先清理
@@ -892,109 +1119,34 @@
                     currentAnalysisTaskId = null;
                 }
                 
-                // 首先显示基础分析，让用户立即看到结果
-                try {
-                    const basicResponse = await fetch('/api/portfolio/basic-analysis');
-                    const basicResult = await basicResponse.json();
-                    
-                    if (basicResponse.ok && basicResult.analysis) {
-                        updateBasicAnalysis(basicResult.analysis);
-                    }
-                } catch (error) {
-                    console.warn('获取基础分析失败:', error);
-                }
+                // 保存强制刷新状态，供后续使用
+                pendingForceRefresh = forceRefresh;
                 
-                // 然后启动OpenAI AI分析
-                const container = document.getElementById('smartAnalysis');
-                
-                // 在基础分析上方添加AI分析进度
-                const aiAnalysisDiv = document.createElement('div');
-                aiAnalysisDiv.id = 'aiAnalysisProgress';
-                aiAnalysisDiv.innerHTML = `
-                    <div class="analysis-loading" style="margin-bottom: 20px;">
-                        <div class="loading-spinner"></div>
-                        <h3>🤖 OpenAI AI分析进行中...</h3>
-                        <p>正在为您提供更深入的智能分析...</p>
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="analysisProgress" style="width: 10%;"></div>
-                        </div>
-                        <div class="progress-text" id="progressText">准备中...</div>
-                        <button class="cancel-btn" onclick="cancelAnalysis()">取消AI分析</button>
-                    </div>
-                `;
-                
-                // 如果已有基础分析，将AI进度插入到顶部
-                if (container.firstChild && !container.firstChild.id?.includes('aiAnalysis')) {
-                    container.insertBefore(aiAnalysisDiv, container.firstChild);
-                } else {
-                    container.appendChild(aiAnalysisDiv);
-                }
-                
-                // 启动AI分析任务
-                const startResponse = await fetch(`/api/smart-analysis${forceRefresh ? '?force_refresh=true' : ''}`);
-                const startResult = await startResponse.json();
-                
-                if (!startResponse.ok) {
-                    // AI分析启动失败，移除进度显示
-                    const progressDiv = document.getElementById('aiAnalysisProgress');
-                    if (progressDiv) {
-                        progressDiv.remove();
-                    }
-                    
-                    // 在基础分析下方显示AI分析失败提示
-                    const errorDiv = document.createElement('div');
-                    errorDiv.innerHTML = `
-                        <div class="error" style="margin-top: 20px;">
-                            <h3>🤖 AI分析启动失败</h3>
-                            <p>${startResult.error || '启动分析失败'}</p>
-                            <button onclick="loadSmartAnalysis(true)" class="retry-btn">重试AI分析</button>
-                        </div>
-                    `;
-                    container.appendChild(errorDiv);
+                // 检查是否已有基础分析，如果没有则先请求基础分析
+                const basicAnalysisContainer = document.querySelector('.basic-analysis-container');
+                if (!basicAnalysisContainer && socket && socket.connected) {
+                    socket.emit('request_data', { type: 'basic_analysis' });
+                    // 等待基础分析完成后再启动AI分析（通过updateBasicAnalysis函数处理）
                     return;
                 }
                 
-                currentAnalysisTaskId = startResult.task_id;
-                
-                // 开始智能轮询状态
-                startSmartPolling(currentAnalysisTaskId);
+                // 如果已有基础分析，直接启动AI分析
+                if (socket && socket.connected) {
+                    // socket.emit('request_smart_analysis', { force_refresh: forceRefresh });
+                    // 清除pending状态
+                    pendingForceRefresh = false;
+                } else {
+                    console.warn('WebSocket未连接，无法启动智能分析。');
+                }
                 
             } catch (error) {
-                // 完全失败时，尝试显示基础分析
-                try {
-                    const basicResponse = await fetch('/api/portfolio/basic-analysis');
-                    const basicResult = await basicResponse.json();
-                    
-                    if (basicResponse.ok && basicResult.analysis) {
-                        updateBasicAnalysis(basicResult.analysis);
-                        
-                        // 在基础分析下方显示错误信息
-                        const container = document.getElementById('smartAnalysis');
-                        const errorDiv = document.createElement('div');
-                        errorDiv.innerHTML = `
-                            <div class="error" style="margin-top: 20px;">
-                                <h3>🤖 AI分析不可用</h3>
-                                <p>${error.message}</p>
-                                <button onclick="loadSmartAnalysis(true)" class="retry-btn">重试AI分析</button>
-                            </div>
-                        `;
-                        container.appendChild(errorDiv);
-                    } else {
-                        throw error;
-                    }
-                } catch (fallbackError) {
-                    document.getElementById('smartAnalysis').innerHTML = 
-                        `<div class="error">
-                            <h3>❌ 分析功能不可用</h3>
-                            <p>无法获取投资组合分析: ${error.message}</p>
-                            <button onclick="loadSmartAnalysis(true)" class="retry-btn">重试</button>
-                        </div>`;
-                }
+                console.error('启动智能分析失败:', error);
             }
         }
-
-        // 智能轮询 - 根据任务状态调整轮询频率
-        function startSmartPolling(taskId) {
+        
+     
+        // WebSocket智能轮询 - 用于分析状态
+        function startWebSocketPolling(taskId) {
             let pollCount = 0;
             const maxPolls = 150; // 最多轮询150次（大约10分钟）
             
@@ -1004,11 +1156,9 @@
                 // 前30秒每2秒检查一次，之后每5秒检查一次
                 const interval = pollCount < 15 ? 2000 : 5000;
                 
-                checkAnalysisStatus(taskId).then((isCompleted) => {
-                    // 如果任务完成或者当前任务ID已变化，停止轮询
-                    if (isCompleted || currentAnalysisTaskId !== taskId) {
-                        return;
-                    }
+                if (socket && socket.connected && currentAnalysisTaskId === taskId) {
+                    // 通过WebSocket请求状态更新
+                    socket.emit('request_analysis_status', { task_id: taskId });
                     
                     // 如果任务还在进行且未超过最大轮询次数
                     if (pollCount < maxPolls) {
@@ -1023,97 +1173,83 @@
                                 <button onclick="loadSmartAnalysis(true)" class="retry-btn">重新分析</button>
                             </div>`;
                     }
-                }).catch(error => {
-                    console.error('轮询错误:', error);
+                } else {
+                    // WebSocket断开或任务ID变化，停止轮询
                     currentAnalysisTaskId = null;
-                });
+                }
             }
             
             // 立即开始第一次检查
-            poll();
+            setTimeout(poll, 1000); // 1秒后开始轮询
         }
-
-        // 检查分析状态
-        async function checkAnalysisStatus(taskId) {
-            try {
-                const response = await fetch(`/api/analysis-status/${taskId}`);
-                const statusData = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(statusData.error || '获取状态失败');
-                }
-                
-                const progress = Math.round(statusData.progress * 100);
-                const progressBar = document.getElementById('analysisProgress');
-                const progressText = document.getElementById('progressText');
-                
-                if (progressBar) {
-                    progressBar.style.width = `${progress}%`;
-                }
-                
-                // 更新状态文本
-                let statusText = '';
-                switch (statusData.status) {
-                    case 'pending':
-                        statusText = '等待处理...';
-                        break;
-                    case 'running':
-                        if (progress < 30) {
-                            statusText = '获取市场数据...';
-                        } else if (progress < 60) {
-                            statusText = 'OpenAI AI 分析中...';
-                        } else if (progress < 90) {
-                            statusText = '生成投资建议...';
-                        } else {
-                            statusText = '完成分析...';
-                        }
-                        break;
-                    case 'completed':
-                        statusText = '分析完成！';
-                        currentAnalysisTaskId = null; // 清除当前任务ID
-                        
-                        // 移除AI分析进度显示
-                        const progressDiv = document.getElementById('aiAnalysisProgress');
-                        if (progressDiv) {
-                            progressDiv.remove();
-                        }
-                        
-                        // 用AI分析结果替换或更新现有内容
-                        updateSmartAnalysis(statusData.result);
-                        return true; // 返回true表示任务完成
-                    case 'failed':
-                        statusText = `分析失败: ${statusData.error}`;
-                        currentAnalysisTaskId = null; // 清除当前任务ID
-                        document.getElementById('smartAnalysis').innerHTML = 
-                            `<div class="error">
-                                <h3>❌ 分析失败</h3>
-                                <p>${statusData.error}</p>
-                                <button onclick="loadSmartAnalysis(true)" class="retry-btn">重新分析</button>
-                            </div>`;
-                        return true; // 返回true表示任务完成
-                    case 'timeout':
-                        statusText = '分析超时';
-                        currentAnalysisTaskId = null; // 清除当前任务ID
-                        document.getElementById('smartAnalysis').innerHTML = 
-                            `<div class="error">
-                                <h3>⏰ 分析超时</h3>
-                                <p>OpenAI API响应超时，请稍后重试</p>
-                                <button onclick="loadSmartAnalysis(true)" class="retry-btn">重新分析</button>
-                            </div>`;
-                        return true; // 返回true表示任务完成
-                }
-                
-                if (progressText) {
-                    progressText.textContent = `${statusText} (${progress}%)`;
-                }
-                
-                return false; // 返回false表示任务未完成，继续轮询
-                
-            } catch (error) {
-                console.error('检查分析状态失败:', error);
-                return true; // 出错时停止轮询
+        
+        // 处理分析状态更新
+        function handleAnalysisStatusUpdate(statusData) {
+            const progress = Math.round(statusData.progress * 100);
+            const progressBar = document.getElementById('analysisProgress');
+            const progressText = document.getElementById('progressText');
+            
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+            }
+            
+            // 更新状态文本
+            let statusText = '';
+            switch (statusData.status) {
+                case 'pending':
+                    statusText = '等待处理...';
+                    break;
+                case 'running':
+                    if (progress < 30) {
+                        statusText = '获取市场数据...';
+                    } else if (progress < 60) {
+                        statusText = 'OpenAI AI 分析中...';
+                    } else if (progress < 90) {
+                        statusText = '生成投资建议...';
+                    } else {
+                        statusText = '完成分析...';
+                    }
+                    break;
+                case 'completed':
+                    statusText = '分析完成！';
+                    currentAnalysisTaskId = null; // 清除当前任务ID
+                    
+                    // 移除AI分析进度显示
+                    const progressDiv = document.getElementById('aiAnalysisProgress');
+                    if (progressDiv) {
+                        progressDiv.remove();
+                    }
+                    
+                    // 用AI分析结果替换或更新现有内容
+                    updateSmartAnalysis(statusData.result);
+                    return; // 不再继续轮询
+                case 'failed':
+                    statusText = `分析失败: ${statusData.error}`;
+                    currentAnalysisTaskId = null; // 清除当前任务ID
+                    document.getElementById('smartAnalysis').innerHTML = 
+                        `<div class="error">
+                            <h3>❌ 分析失败</h3>
+                            <p>${statusData.error}</p>
+                            <button onclick="loadSmartAnalysis(true)" class="retry-btn">重新分析</button>
+                        </div>`;
+                    return; // 不再继续轮询
+                case 'timeout':
+                    statusText = '分析超时';
+                    currentAnalysisTaskId = null; // 清除当前任务ID
+                    document.getElementById('smartAnalysis').innerHTML = 
+                        `<div class="error">
+                            <h3>⏰ 分析超时</h3>
+                            <p>OpenAI API响应超时，请稍后重试</p>
+                            <button onclick="loadSmartAnalysis(true)" class="retry-btn">重新分析</button>
+                        </div>`;
+                    return; // 不再继续轮询
+            }
+            
+            if (progressText) {
+                progressText.textContent = `${statusText} (${progress}%)`;
             }
         }
+
 
         // 取消分析
         function cancelAnalysis() {
@@ -1126,7 +1262,7 @@
                 `<div class="cancelled">
                     <h3>🛑 分析已取消</h3>
                     <p>您可以随时重新开始分析</p>
-                    <button onclick="loadSmartAnalysis()" class="retry-btn">开始分析</button>
+                    <button onclick="loadSmartAnalysis(true)" class="retry-btn">开始分析</button>
                 </div>`;
         }
 
@@ -1135,15 +1271,22 @@
             const container = document.getElementById('smartAnalysis');
             
             if (!analysisData) {
-                container.innerHTML = '<div class="loading">暂无分析数据</div>';
+                // 只有在没有AI分析进度时才显示"暂无分析数据"
+                const aiProgress = document.getElementById('aiAnalysisProgress');
+                if (!aiProgress) {
+                    container.innerHTML = '<div class="loading">暂无分析数据</div>';
+                }
                 return;
             }
+            
+            // 检查是否已有AI分析进度在显示
+            const existingProgress = document.getElementById('aiAnalysisProgress');
             
             let html = `
                 <div class="basic-analysis-container">
                     <div style="background: #e8f4fd; padding: 10px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #007bff;">
                         <h4 style="color: #007bff; margin: 0;">📊 快速投资组合分析</h4>
-                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9em;">基于当前数据的即时分析，AI深度分析正在加载中...</p>
+                        <p style="margin: 5px 0 0 0; color: #666; font-size: 0.9em;">基于当前数据的即时分析，AI深度分析即将启动...</p>
                     </div>
 
                     <!-- 投资组合概览 -->
@@ -1224,7 +1367,31 @@
                 </div>
             `;
             
-            container.innerHTML = html;
+            if (existingProgress) {
+                // 如果已有AI分析进度，将基础分析插入到进度后面
+                existingProgress.insertAdjacentHTML('afterend', html);
+            } else {
+                // 如果没有AI分析进度，直接替换整个容器内容
+                container.innerHTML = html;
+                
+                // 基础分析显示完成后，启动AI分析
+                setTimeout(() => {
+                    startSmartAnalysisAfterBasic();
+                }, 500);
+            }
+        }
+        
+        // 基础分析完成后启动AI分析
+        function startSmartAnalysisAfterBasic() {
+            // 检查WebSocket连接状态
+            if (socket && socket.connected) {
+                // 使用保存的强制刷新状态启动AI分析
+                socket.emit('request_smart_analysis', { force_refresh: pendingForceRefresh });
+                // 清除pending状态
+                pendingForceRefresh = false;
+            } else {
+                console.warn('WebSocket未连接，无法启动AI分析');
+            }
         }
 
         // 获取风险等级颜色
@@ -1239,26 +1406,7 @@
         }
 
         // 加载智能分析（同步版本，用于快速查看）
-        async function loadSmartAnalysisSync() {
-            try {
-                const container = document.getElementById('smartAnalysis');
-                container.innerHTML = '<div class="loading">🔄 正在获取分析...</div>';
-                
-                const response = await fetch('/api/smart-analysis-sync');
-                const result = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(result.error || '分析失败');
-                }
-                
-                updateSmartAnalysis(result);
-                
-            } catch (error) {
-                document.getElementById('smartAnalysis').innerHTML = 
-                    `<div class="error">加载失败: ${error.message}</div>`;
-            }
-        }
-
+       
         // 更新智能分析显示（简化版本，后端已处理格式化）
         // 重新设计的Markdown转HTML函数 - 处理复杂结构
         function markdownToHtml(markdown) {
@@ -1365,6 +1513,12 @@
                 return;
             }
             
+            // 清理基础分析内容，为AI分析结果让路
+            const basicAnalysisContainer = container.querySelector('.basic-analysis-container');
+            if (basicAnalysisContainer) {
+                basicAnalysisContainer.remove();
+            }
+            
             // 如果有原始AI响应，直接显示
             if (analysisData.ai_response) {
                 let html = `
@@ -1467,27 +1621,10 @@
 
         // 保持向后兼容的AI建议加载函数
         async function loadRecommendations() {
-            return loadSmartAnalysis();
+            return loadSmartAnalysis(false); // 建议加载不使用强制刷新
         }
 
-        // 加载订单信息
-        async function loadOrders() {
-            try {
-                const response = await fetch('/api/orders');
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                updateOpenOrders(data.open_orders);
-                
-            } catch (error) {
-                document.getElementById('openOrders').innerHTML = 
-                    `<div class="error">加载失败: ${error.message}</div>`;
-            }
-        }
-
+     
         // 更新未完成订单
         function updateOpenOrders(orders) {
             const container = document.getElementById('openOrders');
@@ -1592,24 +1729,7 @@
             container.innerHTML = html;
         }
 
-        // 加载交易记录
-        async function loadTrades() {
-            try {
-                const response = await fetch('/api/trades');
-                const data = await response.json();
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                updateRecentTrades(data.trades);
-                
-            } catch (error) {
-                document.getElementById('recentTrades').innerHTML = 
-                    `<div class="error">加载失败: ${error.message}</div>`;
-            }
-        }
-
+       
         // 更新最近交易
         function updateRecentTrades(trades) {
             const container = document.getElementById('recentTrades');
