@@ -419,14 +419,7 @@ def emit_portfolio_data():
             'max_drawdown': 0.0,
             'sharpe_ratio': 0.0
         }
-        portfolio_data = {
-            'total_value': total_value,
-            'total_cost': total_cost,
-            'total_pnl': total_pnl,
-            'total_pnl_rate': total_pnl_rate,
-            'asset_allocation': asset_allocation,
-            "performance": performance,
-            'positions': [
+        _positions = [
                 {
                     'symbol': pos.symbol,
                     'currency': pos.currency,
@@ -437,7 +430,27 @@ def emit_portfolio_data():
                     'unrealized_pnl': pos.unrealized_pnl,
                     'unrealized_pnl_rate': pos.unrealized_pnl_rate
                 } for pos in positions
-            ],
+            ]
+        #合计数据
+        total_symbol = {
+            "symbol": "合计",
+            "currency": "合计",
+            "amount": sum(pos['market_value'] for pos in _positions),
+            "avg_price": 0,
+            "current_price": 0,
+            "market_value": total_cost,
+            "unrealized_pnl": total_pnl,
+            "unrealized_pnl_rate": total_pnl_rate
+        }
+        _positions.append(total_symbol)
+        portfolio_data = {
+            'total_value': total_value,
+            'total_cost': total_cost,
+            'total_pnl': total_pnl,
+            'total_pnl_rate': total_pnl_rate,
+            'asset_allocation': asset_allocation,
+            "performance": performance,
+            'positions': _positions,
             'balances': [
                 {
                     'currency': bal.currency,
