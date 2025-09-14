@@ -24,7 +24,7 @@ def main():
     
     from src.web.app import app, socketio
     logger.info("启动WebSocket服务器...")
-    socketio.run(app, host='127.0.0.1', port=6998, debug=False)
+    socketio.run(app, host='127.0.0.1', port=6998, debug=False, allow_unsafe_werkzeug=True)
 
 if __name__ == "__main__":
     main()
