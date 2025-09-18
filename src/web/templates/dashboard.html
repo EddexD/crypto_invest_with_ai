@@ -650,7 +650,6 @@
                 <button class="refresh-btn" onclick="refreshAllData()" style="margin-left: 20px;">刷新数据</button>
                 <button class="refresh-btn" onclick="saveSnapshot()" style="margin-left: 10px;">保存快照</button>
                 <button class="refresh-btn" onclick="toggleWebSocket()" style="margin-left: 10px;" id="wsToggleBtn">重连WS</button>
-                <button class="refresh-btn" onclick="toggleWebSocket()" style="margin-left: 10px;" id="wsToggleBtn">重连WebSocket</button>
             </div>
         </div>
 
@@ -1091,9 +1090,13 @@
                 return;
             }
             
-            let html = '<div class="table-container"><table class="table"><tr><th>币种</th><th>数量</th><th>均价</th><th>市值</th><th>盈亏</th></tr>';
+            let html = '<div class="table-container"><table class="table"><tr><th>币种</th><th>数量</th><th>均价</th><th>市值</th><th>盈亏</th><th>盈利率</th></tr>';
             
             positions.forEach(pos => {
+                // 格式化盈利率
+                const pnlRate = pos.unrealized_pnl_rate || 0;
+                const pnlRateDisplay = `${(pnlRate * 100).toFixed(2)}%`;
+                
                 html += `
                     <tr>
                         <td>${pos.currency}</td>
@@ -1102,6 +1105,9 @@
                         <td>$${pos.market_value?.toFixed(2) || '0.00'}</td>
                         <td class="${pos.unrealized_pnl >= 0 ? 'positive' : 'negative'}">
                             $${pos.unrealized_pnl?.toFixed(2) || '0.00'}
+                        </td>
+                        <td class="${pnlRate >= 0 ? 'positive' : 'negative'}">
+                            ${pnlRateDisplay}
                         </td>
                     </tr>
                 `;

@@ -6,7 +6,7 @@
 
 🤖 一个基于OpenAI GPT-4o搜索预览模型的智能加密货币投资助手，提供专业的市场分析、投资建议和投资组合管理功能。
 
-![](https://crypto.tkbond.us/static/portfolio_latest.png)
+![](https://cryptoaiinvest.top/static/portfolio_latest.png)
 
 ## 📁 项目结构
 
